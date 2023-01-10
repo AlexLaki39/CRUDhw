@@ -1,9 +1,5 @@
 import psycopg2
 
-conn = psycopg2.connect(database=, user=,
-                        password=)
-
-
 def create_db_structure(cursor):
     """
     Создание таблиц
@@ -13,7 +9,7 @@ def create_db_structure(cursor):
             client_id INTEGER PRIMARY KEY,
             name VARCHAR(40) NOT NULL,
             lastname VARCHAR(80) NOT NULL,
-            e_mail VARCHAR(100) NOT NULL UNIQUE
+            Email VARCHAR(100) NOT NULL UNIQUE
             );
                 """)
     cursor.execute("""
@@ -23,27 +19,32 @@ def create_db_structure(cursor):
             phone VARCHAR(70)
             );
                 """)
-    conn.commit()
 
 
-def find_client(cursor, name=None, lastname=None, e_mail=None, phone=None):
+def find_client(cursor):
     """
     Поиск клиента
     """
-    cursor.execute("""
-            SELECT * FROM client c 
-            JOIN phone_number p ON c.client_id = p.client_id 
-            WHERE name=%s or lastname=%s or e_mail=%s or phone=%s;
-            """, (name, lastname, e_mail, phone))
+    param = input('Введите название столбца для поиска \n'
+                  '(имя, фамилия, email, телефон): ')
+    column = {'имя': 'name', 'фамилия': 'lastname', 'email': 'Email',
+              'телефон': 'phone'}
+    column_1 = column[param]
+    value = input('Введите значение для поиска: ')
+    cursor.execute(f"""SELECT * FROM client c 
+                    JOIN phone_number p ON c.client_id = p.client_id 
+                    WHERE {column_1}=%s;
+                    """, (value,))
     return print(cursor.fetchall())
 
 
+
 class Client:
-    def __init__(self, client_id, name, lastname, e_mail, phone=None):
+    def __init__(self, client_id, name, lastname, Email, phone=None):
         self.client_id = client_id
         self.name = name
         self.lastname = lastname
-        self.e_mail = e_mail
+        self.Email = Email
         self.phone = phone
 
     def add_new_client(self, cursor):
@@ -51,14 +52,13 @@ class Client:
         Добавление нового клиента
         """
         cursor.execute("""
-                INSERT INTO client(client_id, name, lastname, e_mail)
+                INSERT INTO client(client_id, name, lastname, Email)
                 VALUES(%s, %s, %s, %s);
-                """, (self.client_id, self.name, self.lastname, self.e_mail))
+                """, (self.client_id, self.name, self.lastname, self.Email))
         cursor.execute("""
                 INSERT INTO phone_number(client_id, phone)
                 VALUES(%s, %s);
                 """, (self.client_id, self.phone))
-        conn.commit()
 
     def add_phone(self, cursor, new_phone):
         """
@@ -67,23 +67,25 @@ class Client:
         cursor.execute("""
                 INSERT INTO phone_number(client_id, phone) VALUES(%s, %s);
                 """, (self.client_id, new_phone))
-        return conn.commit()
 
-    def update_client(self, cursor, name1=None, lastname1=None, e_mail1=None,
-                      phone1=None):
+    def update_client(self, cursor):
         """
         Изменяет данные о клиенте
         """
-        cursor.execute("""
-            UPDATE client SET name=%s, lastname=%s, e_mail=%s
-            WHERE client_id=%s;
-            """, (name1, lastname1, e_mail1, self.client_id))
-        if phone1 != None:
-            cursor.execute("""
-                    UPDATE phone_number SET phone=%s WHERE client_id=%s;
-                    """, (phone1, self.client_id)
-                           )
-        conn.commit()
+        param = input('Введите название столбца который хотите изменить \n'
+                      '(имя, фамилия, email, телефон): ')
+        column = {'имя': 'name', 'фамилия': 'lastname', 'email': 'Email',
+                  'телефон': 'phone'}
+        column_1 = column[param]
+        value = input('Введите значение на которое хотите изменить: ')
+        if column_1 != 'phone':
+            cursor.execute(f"""
+                UPDATE client SET {column_1}=%s WHERE client_id=%s;
+                """, (value, self.client_id))
+        else:
+            cursor.execute(f"""
+                UPDATE phone_number SET {column_1}=%s WHERE client_id=%s;
+                """, (value, self.client_id))
 
     def del_client_phone(self, cursor, phone: str):
         """
@@ -92,7 +94,6 @@ class Client:
         cursor.execute("""
                 DELETE FROM phone_number WHERE client_id=%s and phone=%s;
                 """, (self.client_id, phone))
-        conn.commit()
 
     def del_client(self, cursor):
         """
@@ -104,23 +105,23 @@ class Client:
         cursor.execute("""
                 DELETE FROM client WHERE client_id=%s;
                 """, (self.client_id,))
-        conn.commit()
 
+if __name__ == "__main__":
+    with psycopg2.connect(database='client_db', user='postgres', password='576504') as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                    DROP TABLE phone_number;
+                    DROP TABLE client;
+                    """)
+            create_db_structure(cur)
+            client1 = Client(1, 'Alex', 'Petrov', 'petr@mail.ru', 921764)
+            client1.add_new_client(cur)
+            client2 = Client(2, 'Egor', 'Ivanov', 'ivan@gmail.com', 123123)
+            client2.add_new_client(cur)
+            client1.add_phone(cur, 456456)
+            client1.update_client(cur)
+            client1.del_client_phone(cur, '456456')
+            client2.del_client(cur)
+            find_client(cur)
 
-with conn.cursor() as cur:
-    cur.execute("""
-            DROP TABLE phone_number;
-            DROP TABLE client;
-            """)
-    create_db_structure(cur)
-    client1 = Client(1, 'Alex', 'Petrov', 'petr@mail.ru', 921764)
-    client1.add_new_client(cur)
-    client2 = Client(2, 'Egor', 'Ivanov', 'ivan@gmail.com', 123123)
-    client2.add_new_client(cur)
-    client1.add_phone(cur, 456456)
-    client1.update_client(cur, 'Ivan', 'Ivanov', 'ivanpetr@mail.ru')
-    client1.del_client_phone(cur, '456456')
-    client2.del_client(cur)
-    find_client(cur, 'Ivan', 'Ivanov', 'ivanpetr@mail.ru', '921764')
-
-conn.close()
+    conn.close()
